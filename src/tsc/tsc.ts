@@ -52,16 +52,7 @@ namespace ts {
             filter(optionDeclarations.slice(), v => !!v.showInSimplifiedHelpView);
     }
 
-    export function executeCommandLine(args: string[]): void {
-        if (args.length > 0 && args[0].charCodeAt(0) === CharacterCodes.minus) {
-            const firstOption = args[0].slice(args[0].charCodeAt(1) === CharacterCodes.minus ? 2 : 1).toLowerCase();
-            if (firstOption === "build" || firstOption === "b") {
-                return performBuild(args.slice(1));
-            }
-        }
-
-        const commandLine = parseCommandLine(args);
-
+    function executeCommandLineWorker(commandLine: ParsedCommandLine) {
         if (commandLine.options.build) {
             reportDiagnostic(createCompilerDiagnostic(Diagnostics.Option_build_must_be_the_first_command_line_argument));
             return sys.exit(ExitStatus.DiagnosticsPresent_OutputsSkipped);
@@ -138,7 +129,7 @@ namespace ts {
                     configParseResult.errors.forEach(reportDiagnostic);
                     return sys.exit(ExitStatus.DiagnosticsPresent_OutputsSkipped);
                 }
-                // tslint:disable-next-line:no-null-keyword
+                // eslint-disable-next-line no-null/no-null
                 sys.write(JSON.stringify(convertToTSConfig(configParseResult, configFileName, sys), null, 4) + sys.newLine);
                 return sys.exit(ExitStatus.Success);
             }
@@ -156,7 +147,7 @@ namespace ts {
         }
         else {
             if (commandLineOptions.showConfig) {
-                // tslint:disable-next-line:no-null-keyword
+                // eslint-disable-next-line no-null/no-null
                 sys.write(JSON.stringify(convertToTSConfig(commandLine, combinePaths(sys.getCurrentDirectory(), "tsconfig.json"), sys), null, 4) + sys.newLine);
                 return sys.exit(ExitStatus.Success);
             }
@@ -174,6 +165,24 @@ namespace ts {
         }
     }
 
+    export function executeCommandLine(args: string[]): void {
+        if (args.length > 0 && args[0].charCodeAt(0) === CharacterCodes.minus) {
+            const firstOption = args[0].slice(args[0].charCodeAt(1) === CharacterCodes.minus ? 2 : 1).toLowerCase();
+            if (firstOption === "build" || firstOption === "b") {
+                return performBuild(args.slice(1));
+            }
+        }
+
+        const commandLine = parseCommandLine(args);
+
+        if (commandLine.options.generateCpuProfile && sys.enableCPUProfiler) {
+            sys.enableCPUProfiler(commandLine.options.generateCpuProfile, () => executeCommandLineWorker(commandLine));
+        }
+        else {
+            executeCommandLineWorker(commandLine);
+        }
+    }
+
     function reportWatchModeWithoutSysSupport() {
         if (!sys.watchFile || !sys.watchDirectory) {
             reportDiagnostic(createCompilerDiagnostic(Diagnostics.The_current_host_does_not_support_the_0_option, "--watch"));
@@ -181,8 +190,7 @@ namespace ts {
         }
     }
 
-    function performBuild(args: string[]) {
-        const { buildOptions, projects, errors } = parseBuildCommand(args);
+    function performBuildWorker(buildOptions: BuildOptions, projects: string[], errors: Diagnostic[]) {
         // Update to pretty if host supports it
         updateReportDiagnostic(buildOptions);
 
@@ -229,13 +237,23 @@ namespace ts {
         return sys.exit(buildOptions.clean ? builder.clean() : builder.build());
     }
 
+    function performBuild(args: string[]) {
+        const { buildOptions, projects, errors } = parseBuildCommand(args);
+        if (buildOptions.generateCpuProfile && sys.enableCPUProfiler) {
+            sys.enableCPUProfiler(buildOptions.generateCpuProfile, () => performBuildWorker(buildOptions, projects, errors));
+        }
+        else {
+            performBuildWorker(buildOptions, projects, errors);
+        }
+    }
+
     function createReportErrorSummary(options: CompilerOptions | BuildOptions): ReportEmitErrorSummary | undefined {
         return shouldBePretty(options) ?
             errorCount => sys.write(getErrorSummaryText(errorCount, sys.newLine)) :
             undefined;
     }
 
-    function performCompilation(rootNames: string[], projectReferences: ReadonlyArray<ProjectReference> | undefined, options: CompilerOptions, configFileParsingDiagnostics?: ReadonlyArray<Diagnostic>) {
+    function performCompilation(rootNames: string[], projectReferences: readonly ProjectReference[] | undefined, options: CompilerOptions, configFileParsingDiagnostics?: readonly Diagnostic[]) {
         const host = createCompilerHost(options);
         const currentDirectory = host.getCurrentDirectory();
         const getCanonicalFileName = createGetCanonicalFileName(host.useCaseSensitiveFileNames());

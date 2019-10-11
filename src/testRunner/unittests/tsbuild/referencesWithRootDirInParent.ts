@@ -16,7 +16,7 @@ namespace ts {
                 "/src/dist/main/b.js", "/src/dist/main/b.d.ts"
             ];
             const fs = projFs.shadow();
-            const host = new fakes.SolutionBuilderHost(fs);
+            const host = fakes.SolutionBuilderHost.create(fs);
             const builder = createSolutionBuilder(host, ["/src/src/main", "/src/src/other"], {});
             builder.build();
             host.assertDiagnosticMessages(/*empty*/);
@@ -34,7 +34,7 @@ namespace ts {
             ];
             const fs = projFs.shadow();
             replaceText(fs, "/src/tsconfig.base.json", `"rootDir": "./src/",`, "");
-            const host = new fakes.SolutionBuilderHost(fs);
+            const host = fakes.SolutionBuilderHost.create(fs);
             const builder = createSolutionBuilder(host, ["/src/src/main"], { verbose: true });
             builder.build();
             host.assertDiagnosticMessages(
@@ -43,7 +43,10 @@ namespace ts {
                 [Diagnostics.Building_project_0, "/src/src/other/tsconfig.json"],
                 [Diagnostics.Project_0_is_out_of_date_because_output_file_1_does_not_exist, "src/src/main/tsconfig.json", "src/dist/a.js"],
                 [Diagnostics.Building_project_0, "/src/src/main/tsconfig.json"],
-                [Diagnostics.Cannot_write_file_0_because_it_will_overwrite_tsbuildinfo_file_generated_by_referenced_project_1, "/src/dist/tsconfig.tsbuildinfo", "/src/src/other"]
+                {
+                    message: [Diagnostics.Cannot_write_file_0_because_it_will_overwrite_tsbuildinfo_file_generated_by_referenced_project_1, "/src/dist/tsconfig.tsbuildinfo", "/src/src/other"],
+                    location: expectedLocationIndexOf(fs, "/src/src/main/tsconfig.json", `{ "path": "../other" }`),
+                }
             );
             verifyOutputsPresent(fs, allExpectedOutputs);
             verifyOutputsAbsent(fs, missingOutputs);
@@ -66,7 +69,7 @@ namespace ts {
             fs.writeFileSync("/src/src/other/tsconfig.json", JSON.stringify({
                 compilerOptions: { composite: true, outDir: "../../dist/" },
             }));
-            const host = new fakes.SolutionBuilderHost(fs);
+            const host = fakes.SolutionBuilderHost.create(fs);
             const builder = createSolutionBuilder(host, ["/src/src/main"], { verbose: true });
             builder.build();
             host.assertDiagnosticMessages(
@@ -75,7 +78,10 @@ namespace ts {
                 [Diagnostics.Building_project_0, "/src/src/other/tsconfig.json"],
                 [Diagnostics.Project_0_is_out_of_date_because_output_file_1_does_not_exist, "src/src/main/tsconfig.json", "src/dist/a.js"],
                 [Diagnostics.Building_project_0, "/src/src/main/tsconfig.json"],
-                [Diagnostics.Cannot_write_file_0_because_it_will_overwrite_tsbuildinfo_file_generated_by_referenced_project_1, "/src/dist/tsconfig.tsbuildinfo", "/src/src/other"]
+                {
+                    message: [Diagnostics.Cannot_write_file_0_because_it_will_overwrite_tsbuildinfo_file_generated_by_referenced_project_1, "/src/dist/tsconfig.tsbuildinfo", "/src/src/other"],
+                    location: expectedLocationIndexOf(fs, "/src/src/main/tsconfig.json", `{"path":"../other"}`),
+                }
             );
             verifyOutputsPresent(fs, allExpectedOutputs);
             verifyOutputsAbsent(fs, missingOutputs);
@@ -99,7 +105,7 @@ namespace ts {
             fs.writeFileSync("/src/src/other/tsconfig.other.json", JSON.stringify({
                 compilerOptions: { composite: true, outDir: "../../dist/" },
             }));
-            const host = new fakes.SolutionBuilderHost(fs);
+            const host = fakes.SolutionBuilderHost.create(fs);
             const builder = createSolutionBuilder(host, ["/src/src/main/tsconfig.main.json"], { verbose: true });
             builder.build();
             host.assertDiagnosticMessages(

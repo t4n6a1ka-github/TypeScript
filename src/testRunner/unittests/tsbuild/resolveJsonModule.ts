@@ -1,10 +1,9 @@
 namespace ts {
     describe("unittests:: tsbuild:: with resolveJsonModule option on project resolveJsonModuleAndComposite", () => {
         let projFs: vfs.FileSystem;
-        const { time, tick } = getTime();
         const allExpectedOutputs = ["/src/dist/src/index.js", "/src/dist/src/index.d.ts", "/src/dist/src/hello.json"];
         before(() => {
-            projFs = loadProjectFromDisk("tests/projects/resolveJsonModuleAndComposite", time);
+            projFs = loadProjectFromDisk("tests/projects/resolveJsonModuleAndComposite");
         });
 
         after(() => {
@@ -16,8 +15,8 @@ namespace ts {
             verifyProjectWithResolveJsonModuleWithFs(fs, configFile, allExpectedOutputs, ...expectedDiagnosticMessages);
         }
 
-        function verifyProjectWithResolveJsonModuleWithFs(fs: vfs.FileSystem, configFile: string, allExpectedOutputs: ReadonlyArray<string>, ...expectedDiagnosticMessages: fakes.ExpectedDiagnostic[]) {
-            const host = new fakes.SolutionBuilderHost(fs);
+        function verifyProjectWithResolveJsonModuleWithFs(fs: vfs.FileSystem, configFile: string, allExpectedOutputs: readonly string[], ...expectedDiagnosticMessages: fakes.ExpectedDiagnostic[]) {
+            const host = fakes.SolutionBuilderHost.create(fs);
             const builder = createSolutionBuilder(host, [configFile], { dry: false, force: false, verbose: false });
             builder.build();
             host.assertDiagnosticMessages(...expectedDiagnosticMessages);
@@ -28,11 +27,17 @@ namespace ts {
         }
 
         it("with resolveJsonModule and include only", () => {
-            verifyProjectWithResolveJsonModule("/src/tsconfig_withInclude.json", [
-                Diagnostics.File_0_is_not_listed_within_the_file_list_of_project_1_Projects_must_list_all_files_or_use_an_include_pattern,
-                "/src/src/hello.json",
-                "/src/tsconfig_withInclude.json"
-            ]);
+            verifyProjectWithResolveJsonModule(
+                "/src/tsconfig_withInclude.json",
+                {
+                    message: [
+                        Diagnostics.File_0_is_not_listed_within_the_file_list_of_project_1_Projects_must_list_all_files_or_use_an_include_pattern,
+                        "/src/src/hello.json",
+                        "/src/tsconfig_withInclude.json"
+                    ],
+                    location: expectedLocationIndexOf(projFs, "/src/src/index.ts", `"./hello.json"`)
+                }
+            );
         });
 
         it("with resolveJsonModule and include of *.json along with other include", () => {
@@ -47,7 +52,12 @@ namespace ts {
 
 export default hello.hello`);
             const allExpectedOutputs = ["/src/dist/src/index.js", "/src/dist/src/index.d.ts", "/src/dist/src/index.json"];
-            verifyProjectWithResolveJsonModuleWithFs(fs, "/src/tsconfig_withIncludeOfJson.json", allExpectedOutputs);
+            verifyProjectWithResolveJsonModuleWithFs(
+                fs,
+                "/src/tsconfig_withIncludeOfJson.json",
+                allExpectedOutputs,
+                errorDiagnostic([Diagnostics.Cannot_write_file_0_because_it_would_be_overwritten_by_multiple_input_files, "/src/dist/src/index.d.ts"])
+            );
         });
 
         it("with resolveJsonModule and files containing json file", () => {
@@ -59,10 +69,10 @@ export default hello.hello`);
         });
 
         it("with resolveJsonModule and sourceMap", () => {
-            const fs = projFs.shadow();
+            const { fs, tick } = getFsWithTime(projFs);
             const configFile = "src/tsconfig_withFiles.json";
             replaceText(fs, configFile, `"composite": true,`, `"composite": true, "sourceMap": true,`);
-            const host = new fakes.SolutionBuilderHost(fs);
+            const host = fakes.SolutionBuilderHost.create(fs);
             let builder = createSolutionBuilder(host, [configFile], { verbose: true });
             builder.build();
             host.assertDiagnosticMessages(
@@ -82,10 +92,10 @@ export default hello.hello`);
         });
 
         it("with resolveJsonModule and without outDir", () => {
-            const fs = projFs.shadow();
+            const { fs, tick } = getFsWithTime(projFs);
             const configFile = "src/tsconfig_withFiles.json";
             replaceText(fs, configFile, `"outDir": "dist",`, "");
-            const host = new fakes.SolutionBuilderHost(fs);
+            const host = fakes.SolutionBuilderHost.create(fs);
             let builder = createSolutionBuilder(host, [configFile], { verbose: true });
             builder.build();
             host.assertDiagnosticMessages(
@@ -106,10 +116,9 @@ export default hello.hello`);
     });
 
     describe("unittests:: tsbuild:: with resolveJsonModule option on project importJsonFromProjectReference", () => {
-        const { time, tick } = getTime();
         let projFs: vfs.FileSystem;
         before(() => {
-            projFs = loadProjectFromDisk("tests/projects/importJsonFromProjectReference", time);
+            projFs = loadProjectFromDisk("tests/projects/importJsonFromProjectReference");
         });
 
         after(() => {
@@ -118,11 +127,11 @@ export default hello.hello`);
 
         it("when importing json module from project reference", () => {
             const expectedOutput = "/src/main/index.js";
-            const fs = projFs.shadow();
+            const { fs, tick } = getFsWithTime(projFs);
             const configFile = "src/tsconfig.json";
             const stringsConfigFile = "src/strings/tsconfig.json";
             const mainConfigFile = "src/main/tsconfig.json";
-            const host = new fakes.SolutionBuilderHost(fs);
+            const host = fakes.SolutionBuilderHost.create(fs);
             let builder = createSolutionBuilder(host, [configFile], { verbose: true });
             builder.build();
             host.assertDiagnosticMessages(
